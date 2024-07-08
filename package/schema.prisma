@@ -1,0 +1,262 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+model User {
+  id                     Int                     @id @default(autoincrement())
+  name                   String?
+  email                  String?                 @unique
+  emailVerified          DateTime?
+  password               String?
+  image                  String?
+
+  userTrainings          UserTraining[]
+  trainings              Training[]
+  createdByUser          UserTraining[]          @relation("UserTrainingCreator")
+  userTrainingAuditLogs  UserTrainingAuditLog[]
+  documents              Document[]
+  auditLogs              DocumentAuditLog[]
+  userTrainingSteps      UserTrainingStep[]
+  userQuizAnswers        UserQuizAnswer[]
+  versions               DocumentVersion[]
+
+  roleId                 Int
+  role                   Role                    @relation(fields: [roleId], references: [id])
+
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@map("users")
+}
+
+model Role {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  users    User[]
+
+  @@map("roles")
+}
+
+model TrainingType {
+  id         Int               @id @default(autoincrement())
+  title      String
+  createdAt  DateTime          @default(now())
+  trainings  TrainingStep[]
+
+  @@map("training_types")
+}
+
+model Training {
+  id           Int                @id @default(autoincrement())
+  description  String
+  url          String?
+  userId       Int
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  user         User               @relation(fields: [userId], references: [id])
+  trainingSteps TrainingStep[]
+  assignees    UserTraining[]
+
+  @@map("trainings")
+}
+
+model TrainingStep {
+  id           Int               @id @default(autoincrement())
+  trainingId   Int
+  typeId       Int
+  stepNumber   Int
+  description  String?
+  url          String?
+  documentId   Int?
+
+  document     Document?         @relation(fields: [documentId], references: [id])
+  training     Training          @relation(fields: [trainingId], references: [id])
+  trainingType TrainingType      @relation(fields: [typeId], references: [id])
+  quiz         Quiz[]
+  userTrainingSteps UserTrainingStep[]
+
+  @@unique([id, stepNumber])
+  @@map("training_steps")
+}
+
+model UserTraining {
+  user        User                @relation(fields: [userId], references: [id])
+  userId      Int
+  training    Training            @relation(fields: [trainingId], references: [id])
+  trainingId  Int
+  status      UserTrainingStatus  @default(Pending)
+  createdAt   DateTime            @default(now())
+  createdBy   Int
+  creator     User                @relation("UserTrainingCreator", fields: [createdBy], references: [id])
+  auditLogs   UserTrainingAuditLog[]
+
+  @@id([userId, trainingId])
+  @@map("user_trainings")
+}
+
+model UserTrainingAuditLog {
+  id           Int                 @id @default(autoincrement())
+  userTraining UserTraining        @relation(fields: [userId, trainingId], references: [userId, trainingId])
+  userId       Int
+  trainingId   Int
+  comment      String 
+  newStatus    UserTrainingStatus
+  createdAt    DateTime            @default(now())
+  createdBy    Int
+  creator      User                @relation(fields: [createdBy], references: [id])
+
+  @@map("user_training_audit_logs")
+}
+
+enum UserTrainingStatus {
+  Pending
+  Completed
+  Failed
+}
+
+model Document {
+  id              Int             @id @default(autoincrement())
+  title           String
+  description     String
+  fileUrl         String
+  metadata        Json
+  isCheckedOut    Boolean
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  userId          Int
+  user            User            @relation(fields: [userId], references: [id])
+  functionalArea  FunctionalArea? @relation(fields: [functionalAreaId], references: [id])
+  functionalAreaId Int?
+  groupNameId Int?
+  groupNames      GroupName?      @relation(fields: [groupNameId], references: [id])
+  audits          DocumentAuditLog[]
+  trainingSteps   TrainingStep[]
+  versions         DocumentVersion[]
+
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id            Int             @id @default(autoincrement())
+  version       Int
+  url           String
+  documentId    Int
+  document    Document   @relation(fields: [documentId], references: [id])
+  createdBy      Int
+  user        User                @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime            @default(now())
+
+  @@map("versions")
+}
+
+
+model GroupName {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  code        String
+  documents   Document[]
+
+  @@map("group_names")
+}
+
+model DocumentAuditLog {
+  id          Int        @id @default(autoincrement())
+  comment     String
+  timestamp   DateTime   @default(now())
+  documentId  Int
+  document    Document   @relation(fields: [documentId], references: [id])
+  userId      Int
+  user        User       @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model FunctionalArea {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  code        String
+  documents   Document[]
+
+  @@map("functional_areas")
+}
+
+model Quiz {
+  id          Int       @id @default(autoincrement())
+  title       String
+  minScore    Int
+  trainingStep    TrainingStep  @relation(fields: [trainingStepId], references: [id])
+  trainingStepId  Int       @unique
+  questions   Question[]
+
+  userQuizAnswers UserQuizAnswer[]
+
+  @@map("quizzes")
+}
+
+model Question {
+  id       Int      @id @default(autoincrement())
+  text     String
+  quiz     Quiz     @relation(fields: [quizId], references: [id])
+  quizId   Int
+  answers  Answer[]
+
+  userQuizAnswers UserQuizAnswer[]
+
+  @@map("questions")
+}
+
+model Answer {
+  id          Int      @id @default(autoincrement())
+  text        String
+  isCorrect   Boolean
+  question    Question @relation(fields: [questionId], references: [id])
+  questionId  Int
+  userQuizAnswers UserQuizAnswer[]
+
+  @@map("answers")
+}
+
+model UserTrainingStep {
+  user        User                @relation(fields: [userId], references: [id])
+  userId      Int
+  trainingStep TrainingStep       @relation(fields: [trainingStepId], references: [id])
+  trainingStepId Int
+  stepStatus      UserTrainingStepStatus  @default(Pending)
+  completedAt DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  attemptsLeft Int                @default(3)
+
+  @@id([userId, trainingStepId])
+  @@map("user_training_steps")
+}
+
+enum UserTrainingStepStatus {
+  Pending
+  Completed
+  Failed
+}
+
+model UserQuizAnswer {
+  id            Int        @id @default(autoincrement())
+  userId        Int
+  quizId        Int
+  questionId    Int
+  answerId      Int
+  score         Int
+  answeredAt    DateTime   @default(now())
+  
+  user          User       @relation(fields: [userId], references: [id])
+  quiz          Quiz       @relation(fields: [quizId], references: [id])
+  question      Question   @relation(fields: [questionId], references: [id])
+  answer        Answer     @relation(fields: [answerId], references: [id])
+
+  @@map("user_quiz_answers")
+}
